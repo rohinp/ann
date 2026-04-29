@@ -22,23 +22,30 @@ sbt scalafmtAll      # format all sources
 
 All neural network code lives under `src/main/scala/com/rohin/ann/`.
 
-`Perceptron` (`com.rohin.ann.Perceptron`) is an **immutable case class** — training returns a new instance rather than mutating state. This is the deliberate design pattern for all model types in this project: pure functions, no side effects, fold over a dataset to produce a trained model.
+**`Perceptron`** is a `case class` with a `private` constructor. All behaviour lives in its companion object as **extension methods** (`predict`, `trainOne`, `train`, `updateAllWeights`, `updateBias`). Construction goes through:
 
-The learning rule in `trainOne` follows the classic perceptron update:
-- `w_new = w + lr * (actual - predicted) * x`
-- Returns a `copy(...)` with updated weights and bias
+- `Perceptron.create(bias, weights)` — default learning rate 0.001
+- `Perceptron.create(bias, weights, learningRate)` — explicit learning rate
+- `Perceptron.vec(xs: Double*)` / `Perceptron.zeroVec(size)` — vector factory helpers so callers never import `ArrayRealVector` directly
 
-`Main.scala` is currently a placeholder. As phases progress, it should become a training harness or demo entry point.
+`weights` is `RealVector` from commons-math3. The weight update uses `RealVector.combine(1, η*error, input)` which is `w + η·error·x` as a single native vector op. `trainOne` returns `this` unchanged when `error == 0`.
+
+`train(dataset, epochs)` runs N epochs via a `@tailrec` inner loop. Training duration is always explicit — there is no "run until converged" API.
+
+`Main.scala` is a placeholder.
 
 ## Testing
 
-Every piece of production code must have test coverage. Tests live in `src/test/scala/` and use [munit](https://scalameta.org/munit/).
+Tests are written TDD-style — the test is the specification. Tests live in `src/test/scala/com/rohin/ann/` and use [munit](https://scalameta.org/munit/). Every piece of production code must have test coverage.
 
-Required coverage for each model/component:
-- The happy path (correct prediction, correct weight update)
-- Edge cases: zero weights, zero input, learning rate of 0, single-feature input
-- Dataset-level training: train to convergence on AND and OR, verify the model correctly refuses XOR (never converges)
-- Dimension mismatch must throw, not silently produce a wrong answer
+Test suites use `import Perceptron.*` to access extension methods and factory helpers without qualification.
+
+Every model/component needs tests for:
+- Correct prediction (forward pass)
+- Boundary case (`z = 0` → positive class)
+- Weight and bias update when prediction is wrong (verify exact delta)
+- No update when prediction is already correct
+- Dataset-level training: verify AND and OR converge; XOR test is commented out with an explanation of why it cannot converge
 
 Run a single suite during development:
 ```bash
@@ -49,7 +56,7 @@ sbt "testOnly com.rohin.ann.PerceptronSuite"
 
 - Scala 3 syntax throughout (indentation-based, `then`/`end`, etc.)
 - `.scalafmt.conf` dialect is `scala213` but the project uses Scala 3 — update to `runner.dialect = scala3` before relying on formatter output.
-- Math operations use `org.apache.commons.math3.linear` (`ArrayRealVector`, `RealMatrix`) — do not re-implement what commons-math3 already provides.
+- Math operations use `org.apache.commons.math3.linear` (`ArrayRealVector`, `RealVector`) — do not re-implement what commons-math3 already provides.
 
 ## Documentation
 

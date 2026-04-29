@@ -138,22 +138,33 @@ Everything above the line → ŷ = 1. Everything below → ŷ = 0.
 
 ## 5. Immutable Training — Scala Model
 
-Each call to `trainOne` produces a **new** `Perceptron`. Training over a dataset is a fold:
+Each call to `trainOne` produces a **new** `Perceptron` (or returns `this` unchanged when `error == 0`). One epoch is a `foldLeft` over the dataset. `train` runs N epochs via a tail-recursive loop:
 
 ```mermaid
 flowchart LR
-    P0(["Perceptron₀\n(initial weights)"]) -->|"trainOne(x₁,y₁)"| P1
-    P1(["Perceptron₁"]) -->|"trainOne(x₂,y₂)"| P2
-    P2(["Perceptron₂"]) -->|"trainOne(x₃,y₃)"| P3
-    P3(["..."]) -->|"trainOne(xₙ,yₙ)"| Pn(["PerceptronN\n(trained)"])
+    P0(["Perceptron₀\n(initial)"]) -->|"epoch 1\nfoldLeft over dataset"| P1
+    P1(["Perceptron₁"]) -->|"epoch 2\nfoldLeft over dataset"| P2
+    P2(["Perceptron₂"]) -->|"..."| Pn(["PerceptronN\n(after N epochs)"])
 ```
 
-In code:
+Inside each epoch, one `foldLeft` step:
+
+```mermaid
+flowchart LR
+    Pa(["Pᵢ"]) -->|"trainOne(x, y)"| Pb(["Pᵢ₊₁"])
+```
+
+In code (all methods are extension methods on the companion — import with `import Perceptron.*`):
 
 ```scala
-val trained = dataset.foldLeft(initialPerceptron) { case (p, (input, label)) =>
-  p.trainOne(input, label)
-}
+// one example at a time
+val updated = perceptron.trainOne(input, actual)
+
+// one full epoch (foldLeft inside train)
+val afterOneEpoch = perceptron.train(dataset, epochs = 1)
+
+// N epochs, tail-recursive, stack-safe
+val trained = initial.train(data, epochs = 10)
 ```
 
-Every intermediate `Perceptron` is still accessible if you fold into a `List` instead — useful for plotting loss over epochs.
+The epoch count is explicit — the caller decides how long to train. There is no "train until converged" API; call `train` with increasing epochs and observe predictions to determine when results are good enough.

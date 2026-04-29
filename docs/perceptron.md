@@ -154,112 +154,150 @@ If the data is not linearly separable, the algorithm will cycle indefinitely —
 
 ## 6. Implementation Walkthrough
 
-The implementation lives at `src/main/scala/com/rohin/ann/Percentron.scala`.
+The implementation lives at `src/main/scala/com/rohin/ann/Perceptron.scala`.
 
 ### 6.1 Design Decisions
 
-**Immutable case class.** The `Perceptron` is a `final case class`. Training does not mutate state; `trainOne` returns a new `Perceptron`. This is idiomatic Scala and makes reasoning about the model trivial — you can hold onto any intermediate state, compose training steps with `foldLeft`, and test pure functions without setup/teardown.
+**Private constructor, companion object as the public API.** The `case class` has a `private` constructor so the only way to build a `Perceptron` is through the companion:
 
 ```scala
-final case class Perceptron(
-    weights: Vector[Double],
-    bias: Double,
-    learningRate: Double
-)
-```
-
-**`learningRate` on the model.** The learning rate is part of the model's identity, not a transient training parameter. This means you can create differently-configured perceptrons and compare them without passing `η` into every training call.
-
-### 6.2 `dot` — The Weighted Sum
-
-```scala
-private def dot(a: Vector[Double], b: Vector[Double]): Double =
-  a.zip(b).map { case (x, y) => x * y }.sum
-```
-
-Computes `Σ aᵢbᵢ`. Currently uses Scala's `Vector`, which allocates intermediate collections. This will be replaced with `RealVector.dotProduct` from commons-math3, which operates on raw arrays with no allocation overhead.
-
-**Current bug:** `zip` silently truncates to the shorter vector if lengths differ. A mismatched input produces a wrong (but not erroring) result. Dimension validation must be added.
-
-### 6.3 `step` — Activation Function
-
-```scala
-private def step(z: Double): Int =
-  if z >= 0 then 1 else 0
-```
-
-`z = 0` is classified as 1. This is a valid convention (Heaviside step). It means the boundary hyperplane itself belongs to the positive class.
-
-### 6.4 `predict` — Forward Pass
-
-```scala
-def predict(input: Vector[Double]): Int = {
-  val z = dot(weights, input) + bias
-  step(z)
-}
-```
-
-The complete forward pass: compute pre-activation, apply activation. Clean and direct.
-
-### 6.5 `trainOne` — One Weight Update
-
-```scala
-def trainOne(input: Vector[Double], actual: Int): Perceptron = {
-  val prediction = predict(input)
-  val error = actual - prediction
-
-  val updatedWeights = weights.zip(input).map { case (w, x) =>
-    w + learningRate * error * x
-  }
-  val updatedBias = bias + learningRate * error
-
-  copy(weights = updatedWeights, bias = updatedBias)
-}
-```
-
-Implements the perceptron learning rule exactly. Returns a new `Perceptron`. Notice `copy(...)` — it reuses `learningRate` unchanged, updating only `weights` and `bias`.
-
-**Missing:** A `train` method that runs one full epoch over a dataset:
-
-```scala
-def train(data: Seq[(Vector[Double], Int)]): Perceptron =
-  data.foldLeft(this) { case (p, (input, label)) => p.trainOne(input, label) }
-```
-
-This is the idiomatic way to fold an immutable model over a dataset in Scala.
-
----
-
-## 7. Known Issues in the Current Implementation
-
-| Issue | Location | Impact |
-|---|---|---|
-| No dimension validation | `dot`, `trainOne` | Silent wrong results on mismatched inputs |
-| No `train` method | — | Caller must manually fold over dataset |
-| Uses `Vector[Double]` not `RealVector` | `dot`, weights field | Missed commons-math3 integration, allocates intermediates |
-| `dot` re-implements `RealVector.dotProduct` | `dot` | Unnecessary, remove once commons-math3 is used |
-| Filename is `Percentron.scala` | file | Typo — class is `Perceptron`, file should match |
-
----
-
-## 8. Next Steps (Planned Redesign)
-
-Replace `Vector[Double]` with `org.apache.commons.math3.linear.ArrayRealVector`:
-
-```scala
-import org.apache.commons.math3.linear.{ArrayRealVector, RealVector}
-
-final case class Perceptron(
+case class Perceptron private (
     weights: RealVector,
     bias: Double,
     learningRate: Double
 )
 ```
 
-This gives:
-- `weights.dotProduct(input)` — native, zero-allocation dot product
-- `weights.add(delta)` — vector arithmetic without `zip/map`
-- `weights.mapMultiply(scalar)` — scalar multiplication
-- Dimension mismatch throws `DimensionMismatchException` automatically
+All operations — `predict`, `trainOne`, `train`, `updateAllWeights`, `updateBias` — live in the companion object as **extension methods**. This keeps the data type lean (pure data) while still allowing natural method-call syntax (`perceptron.predict(input)`). Tests import everything with `import Perceptron.*`.
 
-The step function and learning rule logic remain the same — only the representation changes.
+**`learningRate` on the model.** It is part of the model's identity, not a transient training parameter. `copy(...)` carries it through every update automatically.
+
+**Factory helpers on the companion.** `vec(xs: Double*)` and `zeroVec(size: Int)` wrap `ArrayRealVector` so neither tests nor callers ever need to import commons-math3 directly.
+
+### 6.2 Smart constructors — `create`
+
+Two overloads, one with a sensible default learning rate:
+
+```scala
+def create(bias: Double, weights: RealVector): Perceptron          // lr = 0.001
+def create(bias: Double, weights: RealVector, learningRate: Double) // explicit lr
+```
+
+Typical usage in tests (with `import Perceptron.*`):
+
+```scala
+val p = create(bias = 0, weights = vec(1, 1), learningRate = 0.1)
+val q = create(bias = -1, weights = zeroVec(2))   // uses default lr
+```
+
+### 6.3 `step` — Activation Function
+
+```scala
+def step(z: Double): Int =
+  if (z >= 0) 1 else 0
+```
+
+Public on the companion — it is a pure math function, independently testable and reusable in future activation comparisons. `z = 0` maps to 1: the boundary hyperplane belongs to the positive class (Heaviside convention).
+
+### 6.4 `predict` — Forward Pass
+
+```scala
+extension (perceptron: Perceptron)
+  def predict(input: RealVector): Int =
+    step(perceptron.weights.dotProduct(input) + perceptron.bias)
+```
+
+`RealVector.dotProduct` from commons-math3 computes the weighted sum natively and throws `DimensionMismatchException` automatically on a size mismatch — no manual validation needed.
+
+### 6.5 `updateAllWeights` — Weight Update Step
+
+```scala
+extension (perceptron: Perceptron)
+  def updateAllWeights(step: Double, ys: RealVector): Perceptron =
+    perceptron.copy(
+      weights = perceptron.weights.combine(1, step, ys)
+    )
+```
+
+`RealVector.combine(a1, a2, v)` computes `a1·this + a2·v`. Called as `combine(1, updateMagnitude, input)` this gives:
+
+```
+weights_new = 1·weights + (η·error)·input
+            = weights + η·error·input
+```
+
+This is the perceptron weight update rule expressed as a single native vector operation.
+
+### 6.6 `updateBias` — Bias Update Step
+
+```scala
+extension (perceptron: Perceptron)
+  def updateBias(updateMagnitude: Double): Perceptron =
+    perceptron.copy(bias = perceptron.bias + updateMagnitude)
+```
+
+Decomposed into its own named method so `trainOne` reads as a sequence of focused steps rather than one big expression.
+
+### 6.7 `trainOne` — One Example Update
+
+```scala
+extension (perceptron: Perceptron)
+  def trainOne(input: RealVector, actual: Int): Perceptron =
+    val predicted = perceptron.predict(input)
+    val error = actual - predicted
+
+    if error == 0 then perceptron
+    else
+      val updateMagnitude = perceptron.learningRate * error
+      perceptron
+        .updateAllWeights(updateMagnitude, input)
+        .updateBias(updateMagnitude)
+```
+
+Short-circuits on `error == 0` — returns `this` with no allocation when the prediction is already correct. Otherwise chains the two update steps. `updateMagnitude = η × error` is computed once and shared by both, which makes the relationship between weight and bias update explicit.
+
+### 6.8 `train` — Full Training Run
+
+```scala
+extension (perceptron: Perceptron)
+  def train(dataset: List[(RealVector, Int)], epochs: Int): Perceptron =
+    @tailrec
+    def loop(iterate: Int, p: Perceptron): Perceptron =
+      if (iterate == 0) then p
+      else loop(iterate - 1, dataset.foldLeft(p) { case (acc, (input, actual)) =>
+        acc.trainOne(input, actual)
+      })
+    loop(epochs, perceptron)
+```
+
+`@tailrec` inner loop — safe for large epoch counts with no stack risk. Each iteration runs one full epoch (a `foldLeft` over the entire dataset), then recurses with `epochs - 1`. The caller controls exactly how many epochs to run:
+
+```scala
+val trained = initial.train(data, epochs = 10)
+```
+
+---
+
+## 7. Current State
+
+All previously known issues are resolved in the current implementation:
+
+| Area | Resolution |
+|---|---|
+| Dimension validation | `RealVector.dotProduct` throws `DimensionMismatchException` automatically |
+| Weight update math | `combine(1, η·error, input)` — single native vector op from commons-math3 |
+| Allocation on correct prediction | `trainOne` returns `this` when `error == 0` |
+| Training API | `train(dataset, epochs)` — explicit epoch count, tail-recursive, stack-safe |
+| Code organisation | Data in `case class`, all behaviour in companion as extension methods |
+
+---
+
+## 8. What's Next — Phase 2
+
+The natural next step is to replace the step activation with **sigmoid** and introduce a loss function:
+
+- `sigmoid(z) = 1 / (1 + exp(-z))` — differentiable, output is a probability in (0, 1)
+- Loss: Mean Squared Error `L = (1/n) Σ (y - ŷ)²`
+- Gradient descent instead of the binary perceptron rule
+
+This unlocks continuous outputs and the ability to make progress on non-linearly-separable data, setting up gradient flow for multi-layer networks in Phase 4.
