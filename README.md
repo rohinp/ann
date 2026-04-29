@@ -29,19 +29,19 @@ This project follows a **bottom-up approach**:
 
 ## 🗺️ Roadmap
 
-### Phase 1 — Perceptron (Foundations)
+### Phase 1 — Perceptron (Foundations) ✅
 
 **Goal:** Understand the core learning loop
 
-* [ ] Implement a single perceptron
-* [ ] Manual dot product implementation
-* [ ] Step activation function
-* [ ] Weight & bias updates (learning rule)
-* [ ] Train on simple datasets:
+* [x] Implement a single perceptron
+* [x] Dot product via Apache Commons Math (`RealVector.dotProduct`) — deliberately chose library over manual implementation
+* [x] Step activation function
+* [x] Weight & bias updates (learning rule) — using `RealVector.combine` for the vector update
+* [x] Train on simple datasets:
 
-  * AND
-  * OR
-* [ ] Observe failure on XOR
+  * AND ✓ (verified in tests)
+  * OR ✓ (verified in tests)
+* [x] Observe failure on XOR — XOR test documents the limitation with an explanation
 
 **Key Concepts:**
 
@@ -72,15 +72,15 @@ This project follows a **bottom-up approach**:
 
 **Goal:** Shift to vectorized computation
 
-* [ ] Refactor code to use `Array[Double]`
-* [ ] Implement vector operations
-* [ ] Introduce basic matrix structure
-* [ ] Optimize dot product
+* [x] Vector representation — already using `RealVector` (commons-math3) from Phase 1
+* [ ] Introduce matrix structure (`RealMatrix`)
+* [ ] Batch processing — forward pass over multiple inputs at once
+* [ ] Compare performance (loop vs matrix ops)
 
 **Key Concepts:**
 
 * Data representation
-* Performance trade-offs (Vector vs Array)
+* Performance trade-offs (element-wise vs batched)
 * Foundations of linear algebra in code
 
 ---
@@ -156,22 +156,20 @@ This project follows a **bottom-up approach**:
 
 ## 🛠️ Tech Stack
 
-* Scala (JVM)
+* Scala 3 (JVM)
 * sbt
-* (Later) Project Babylon / HAT
+* Apache Commons Math 3 — vector/matrix operations (`RealVector`, `RealMatrix`)
+* munit — test framework
+* (Later) ND4J for batched matrix ops, Project Babylon / HAT for GPU
 
 ---
 
-## 📂 Project Structure (Planned)
+## 📂 Project Structure
 
 ```
-/perceptron
-/logistic-regression
-/vector-math
-/neural-network
-/matrix-engine
-/performance
-/gpu-experiments
+src/main/scala/com/rohin/ann/   — model implementations
+src/test/scala/com/rohin/ann/   — test suites (one per model)
+docs/                           — theory and implementation notes per phase
 ```
 
 ---
