@@ -4,7 +4,7 @@ import munit.FunSuite
 import org.apache.commons.math3.linear.{ArrayRealVector, RealVector}
 import com.rohin.ann.Perceptron
 
-class PerceptronSuite extends FunSuite:
+class PerceptronSuite extends FunSuite {
   import Perceptron.*
 
   test("predict returns 1 when weighted sum is positive") {
@@ -73,11 +73,31 @@ class PerceptronSuite extends FunSuite:
 
   }
 
+  test("perceptron learns OR gate") {
+
+    val data = List(
+      (vec(0, 0), 0),
+      (vec(0, 1), 1),
+      (vec(1, 0), 1),
+      (vec(1, 1), 1)
+    )
+
+    val initial = create(bias = 0, weights = zeroVec(2), learningRate = 1.0)
+
+    val trained = initial.train(data, epochs = 10)
+
+    assertEquals(trained.predict(vec(0, 0)), 0)
+    assertEquals(trained.predict(vec(0, 1)), 1)
+    assertEquals(trained.predict(vec(1, 0)), 1)
+    assertEquals(trained.predict(vec(1, 1)), 1)
+
+  }
+
   /*
   A single perceptron can only learn linearly separable data.
   XOR is not linearly separable
    */
-  /* test("perceptron learns XOR gate") {
+  test("perceptron learns XOR gate") {
 
     val data = List(
       (vec(0, 0), 0),
@@ -90,9 +110,12 @@ class PerceptronSuite extends FunSuite:
 
     val trained = initial.train(data, epochs = 10)
 
-    assertEquals(trained.predict(vec(0, 0)), 0)
-    assertEquals(trained.predict(vec(0, 1)), 1)
-    assertEquals(trained.predict(vec(1, 0)), 1)
-    assertEquals(trained.predict(vec(1, 1)), 0)
+    val correct = trained.predict(vec(0, 0)) == 0 &&
+      trained.predict(vec(0, 1)) == 1 &&
+      trained.predict(vec(1, 0)) == 1 &&
+      trained.predict(vec(1, 1)) == 0
 
-  } */
+    assertEquals(correct, false)
+
+  }
+}

@@ -10,7 +10,7 @@ case class Perceptron private (
     learningRate: Double
 )
 
-object Perceptron:
+object Perceptron {
 
   def vec(xs: Double*): RealVector =
     new ArrayRealVector(xs.toArray)
@@ -37,8 +37,12 @@ object Perceptron:
       step(perceptron.weights.dotProduct(input) + perceptron.bias)
   extension (perceptron: Perceptron)
     def updateAllWeights(step: Double, ys: RealVector): Perceptron =
+      // Create an initial safe copy
+      val workingWeights = perceptron.weights.copy()
+
+      // Perform fast, mutating updates during the training loop
       perceptron.copy(
-        weights = perceptron.weights.combine(1, step, ys)
+        weights = workingWeights.combine(1, step, ys)
       )
 
   extension (perceptron: Perceptron)
@@ -72,3 +76,4 @@ object Perceptron:
             }
           )
       loop(epochs, perceptron)
+}

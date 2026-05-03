@@ -33,3 +33,9 @@ metals.sbt
 .idea
 .idea_modules
 /.worksheet/
+
+# JVM diagnostic dumps (OpenJ9/IBM J9 — generated on JVM crash or OOM)
+*.trc
+*.phd
+*.dmp
+javacore.*.txt
