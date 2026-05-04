@@ -292,12 +292,91 @@ All previously known issues are resolved in the current implementation:
 
 ---
 
-## 8. What's Next — Phase 2
+## 8. What Came Next — Phases 2–4
 
-The natural next step is to replace the step activation with **sigmoid** and introduce a loss function:
+Phases 2–4 are complete. This section records the key ideas that bridge the perceptron to the two-layer network. The full treatment is in `docs/two_layer_nn.md`.
 
-- `sigmoid(z) = 1 / (1 + exp(-z))` — differentiable, output is a probability in (0, 1)
-- Loss: Mean Squared Error `L = (1/n) Σ (y - ŷ)²`
-- Gradient descent instead of the binary perceptron rule
+### 8.1 Why Step Had to Go
 
-This unlocks continuous outputs and the ability to make progress on non-linearly-separable data, setting up gradient flow for multi-layer networks in Phase 4.
+The step function has two fatal problems for multi-layer learning:
+
+1. **Zero gradient almost everywhere.** `step'(z) = 0` for all `z ≠ 0`, and is undefined at `z = 0`. There is no signal to tell a weight how much to change.
+2. **Binary output.** A hidden layer using step produces {0, 1} activations. The output neuron sees only integer inputs and cannot represent the continuous transformations needed to solve XOR.
+
+### 8.2 Sigmoid
+
+The replacement is **sigmoid**:
+
+```
+σ(x) = 1 / (1 + e^{-x})
+```
+
+Output is in (0, 1) — continuous, differentiable everywhere.
+
+### 8.3 Derivation of the Sigmoid Derivative
+
+This derivation is the reason sigmoid is so convenient in backprop — the derivative expresses entirely in terms of the activation itself, so there is no need to store `z` if `a = σ(z)` is already cached.
+
+Starting from the definition and applying the chain rule:
+
+```
+d/dx σ(x)  =  d/dx (1 + e^{-x})^{-1}
+```
+
+Power rule, derivative of the outer function:
+
+```
+           =  -1 · (1 + e^{-x})^{-2} · d/dx (1 + e^{-x})
+```
+
+Derivative of the inner function (`d/dx e^{-x} = -e^{-x}`):
+
+```
+           =  -(1 + e^{-x})^{-2} · (-e^{-x})
+```
+
+Two negatives cancel:
+
+```
+           =  e^{-x} / (1 + e^{-x})²
+```
+
+Split the fraction — multiply and divide by `(1 + e^{-x})`:
+
+```
+           =  1/(1 + e^{-x})  ·  e^{-x}/(1 + e^{-x})
+```
+
+The first factor is `σ(x)`. For the second factor, note that:
+
+```
+1 - σ(x)  =  1 - 1/(1 + e^{-x})
+           =  e^{-x} / (1 + e^{-x})
+```
+
+So the second factor is `1 - σ(x)`. Therefore:
+
+```
+┌─────────────────────────────┐
+│  σ'(x) = σ(x) · (1 - σ(x)) │
+└─────────────────────────────┘
+```
+
+In code (`Activation.scala`), this is implemented as:
+
+```scala
+def sigmoidDerivativeFromActivation(a: Double): Double =
+  a * (1 - a)
+```
+
+Where `a` is the already-computed activation `σ(z)`. During backprop the activation is always in the `ForwardCache`, so this form avoids recomputing sigmoid.
+
+### 8.4 From Perceptron to Two-Layer Network
+
+With a differentiable activation:
+
+- The hidden layer can learn a *transformation* of the input space, not just a threshold
+- The output neuron draws its decision boundary in the transformed space
+- Gradient can flow backward through both layers via the chain rule
+
+The perceptron learning rule (`error = y − ŷ`, integer steps) is replaced by **gradient descent** with the MSE loss gradient. See `docs/two_layer_nn.md` for the full derivation and implementation walkthrough.

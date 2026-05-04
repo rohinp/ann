@@ -115,6 +115,7 @@ sbt "testOnly com.rohin.ann.twolayer.TwoLayerNNSuite"
 
 Theory and implementation notes for each model live in `docs/`:
 
+- `docs/tdd_walkthrough.md` — **start here** — guided tour through all four test suites in the order they were written; explains what each test teaches and how the suites connect
 - `docs/perceptron.md` — math, learning rule, linear separability, implementation walkthrough (Phase 1)
 - `docs/perceptron_diagram.md` — Mermaid diagrams: forward pass, training loop, decision boundary
 - `docs/two_layer_nn.md` — sigmoid, backpropagation, XOR solution, implementation walkthrough (Phases 2–4)

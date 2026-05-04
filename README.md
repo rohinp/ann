@@ -196,6 +196,7 @@ src/test/scala/com/rohin/ann/
     TwoLayerNNSuite.scala   — two-layer NN tests (incl. XOR convergence)
 
 docs/
+  tdd_walkthrough.md        — guided tour through all test suites in the order they were written
   perceptron.md             — theory + implementation walkthrough (Phase 1)
   perceptron_diagram.md     — Mermaid diagrams: forward pass, training loop, decision boundary
   two_layer_nn.md           — theory + implementation walkthrough (Phases 2–4)

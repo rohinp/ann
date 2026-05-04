@@ -47,10 +47,10 @@ object TwoLayerNN {
        */
       val z1 = nn.W1.operate(input).add(nn.b1)
       /*
-        Special case because if a map
-        ```val a1 = z1.map(Activation.sigmoid)```
-        is used scala compiler tries to convert it to a java function type.
-        Compilation fails and it makes scala compiler go bonkers.
+          Special case because if a map
+          ```z1.map(ActivationFn.forward)```
+          is used scala compiler tries to eta-expantion but it is not a java function type.
+          Compilation fails and it makes scala compiler go bonkers.
        */
       val sigmoidFn = new UnivariateFunction {
         def value(z: Double): Double = Activation.sigmoid(z)
