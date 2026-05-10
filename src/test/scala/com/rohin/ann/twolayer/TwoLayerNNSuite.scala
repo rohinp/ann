@@ -91,13 +91,20 @@ class TwoLayerNNSuite extends FunSuite {
       (vec(1, 1), 0)
     )
 
-    val nn = TwoLayerNN.create(inputSize = 2, hiddenSize = 2, lr = 0.1)
+    val nn = TwoLayerNN.create(inputSize = 2, hiddenSize = 2, lr = 0.5)
 
     val trained = nn.train(data, epochs = 10000)
 
+    /*
+    Asserting when we get very close to the actual prediction of values, not exact.
+     */
     assert(math.abs(trained.forward(vec(0, 0)).a2 - 0) <= 0.1)
-    assert(trained.forward(vec(0, 1)).a2 > 0.9)
-    assert(trained.forward(vec(1, 0)).a2 > 0.9)
+    assert(
+      trained.forward(vec(0, 1)).a2 > 0.9 && trained.forward(vec(0, 1)).a2 < 1.0
+    )
+    assert(
+      trained.forward(vec(1, 0)).a2 > 0.9 && trained.forward(vec(1, 0)).a2 < 1.0
+    )
     assert(math.abs(trained.forward(vec(1, 1)).a2 - 0) <= 0.1)
   }
 }
