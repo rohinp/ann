@@ -101,22 +101,24 @@ This project follows a **bottom-up approach**:
 
 ---
 
-### Phase 5 — Pluggable / Composable Neurons (Next)
+### Phase 5 — Pluggable / Composable Neurons ✅
 
 **Goal:** Understand *how neurons compose* — replace the monolithic `TwoLayerNN` with explicit building blocks
 
-The current `TwoLayerNN` is self-contained: it knows its own shape, forward pass, and backward pass hardwired together. The next step is to decompose it into first-class pieces so a network is assembled from parts:
+`pytorchlite` now implements this phase:
 
-* [ ] `Neuron` — a single unit with a configurable activation function
-* [ ] `Layer` — an ordered collection of neurons that forward/backward as a unit
-* [ ] `Network` — an ordered sequence of layers; forward pass composes left-to-right, backward pass composes right-to-left
-* [ ] Verify: the composed network replicates XOR (same result, different structure)
+* [x] `ActivationFn` — trait capturing `forward`, `derivativeFromActivation`, plus a `forwardFn` adapter so commons-math `RealVector.map` accepts Scala lambdas; ships with `Sigmoid`
+* [x] `Dense` — weight matrix (`output × input`), bias vector, and activation per layer; `forward` returns `(z, a)` to preserve caches for backprop
+* [x] `Sequential` — ordered list of `Dense` layers with `forward`, `forwardPass`, `backward`, `applyGradients`, `trainOne`, and `train`
+* [x] `Loss` + `Gradients` — explicit structures for the output delta, hidden deltas, and layer-wise gradient application
+* [x] `ConsoleLogging.DebugConfig` — opt-in tracing of gradients/bias updates during training/debugging
+* [x] XOR training spec (`TrainingSuite`) proves the composed stack learns the classic non-linear dataset in < 5,000 epochs
 
 **Key Concepts:**
 
 * Separation of topology from learning rule
-* Activation as a pluggable strategy (step, sigmoid, ReLU, …)
-* Gradient flowing through a composed structure
+* Activation as a pluggable strategy (swap-out sigmoid later)
+* Gradient flowing through a composed structure built from layers
 
 ---
 
@@ -200,6 +202,7 @@ docs/
   perceptron.md             — theory + implementation walkthrough (Phase 1)
   perceptron_diagram.md     — Mermaid diagrams: forward pass, training loop, decision boundary
   two_layer_nn.md           — theory + implementation walkthrough (Phases 2–4)
+  pytorchlite.md            — architecture + TDD notes for the pluggable Sequential stack (Phase 5)
 ```
 
 ---

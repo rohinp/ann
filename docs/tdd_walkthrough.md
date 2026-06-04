@@ -335,14 +335,82 @@ This is the payoff of the entire sequence.
 
 ---
 
+## Phase 5 — pytorchlite
+
+Phase 5 revisits everything you just learned, but rearranges the same math into reusable bricks. Instead of one hard-coded `TwoLayerNN`, the `pytorchlite` package introduces a `Dense` layer abstraction, a `Sequential` container, explicit gradient data structures, and a small logging DSL for debugging. The tests mirror that progression.
+
+### Test 1 — `ActivationFnSuite` keeps nonlinear math isolated
+
+```scala
+val s = ActivationFn.Sigmoid
+assertEquals(s.forward(0), 0.5)
+assertEquals(s.derivativeFromActivation(0.5), 0.25)
+```
+
+**What you learn:** The activation is now an explicit strategy object. `ActivationFn` also exposes `forwardFn`, a tiny adapter so commons-math's `RealVector.map` can invoke the Scala-defined function. That fixes the eta-expansion problem noted back in `TwoLayerNN.forward`.
+
+### Test 2 — `Dense` layer forward preserves shape contracts
+
+```scala
+val layer = Dense(inputSize = 2, outputSize = 3, act = ActivationFn.Sigmoid)
+val (_, a) = layer.forward(vec(1, 0))
+assertEquals(a.getDimension, 3)
+```
+
+**What you learn:** Each layer owns its weight matrix (`output × input`), bias vector, and activation. The constructor randomises both weights and biases in `(-0.5, 0.5)` via helpers in `package.scala`. `forward` now returns both `z` and `a` so the caller can cache them for backprop.
+
+### Test 3 — `Loss.outputDelta` reuses the MSE + sigmoid gradient
+
+```scala
+val delta = Loss.outputDelta(output = vec(0.5), target = vec(1.0))
+assertClose(delta.getEntry(0), -0.125)
+```
+
+**What you learn:** The output gradient stayed the same math `(a − y) · a · (1 − a)`, but it's now extracted into a dedicated helper so the sequential stack doesn't mix loss-specific formulas with layer orchestration.
+
+### Test 4 — `Sequential.forwardPass` caches activations
+
+```scala
+val pass = net.forwardPass(vec(1, 0))
+assertEquals(pass.activations.size, 3)
+assertEquals(pass.zs.size, 2)
+```
+
+**What you learn:** `ForwardPass` is the new `ForwardCache`. It stores every `z` and `a`, including the input activation at index 0. This keeps the later gradient code identical regardless of depth.
+
+### Test 5 — `Sequential.backward` + `Gradients` propagate deltas layer-by-layer
+
+```scala
+val pass = net.forwardPass(vec(1, 0))
+val grads = net.backward(pass, vec(1))
+assertEquals(grads.deltas.size, 2)
+```
+
+**What you learn:** Gradients flow from the output delta computed in Test 3, through each layer's transposed weight matrix, and are Hadamard-multiplied by the activation derivative for that layer. The result is a list of deltas aligned with the layer order.
+
+### Test 6 — `applyGradients`, `trainOne`, and `train` mutate weights repeatedly
+
+Each helper gets its own assertion that weights actually change:
+
+```scala
+val grads = net.backward(pass, vec(1))
+val updated = net.applyGradients(pass, grads, learningRate = 0.1)
+assertNotEquals(updated.layers.head.W, net.layers.head.W)
+```
+
+`trainOne` and `train` simply compose the helpers, but having discrete tests ensures regressions surface at the exact stage they originate. These specs also exercise the optional `ConsoleLogging.DebugConfig` so you can dump gradients mid-test when needed.
+
+### Test 7 — `TrainingSuite` proves the composed stack solves XOR
+
+```scala
+val xor = List((vec(0, 0), vec(0)), ..., (vec(1, 1), vec(0)))
+val trained = net.train(xor, epochs = 5000, learningRate = 0.1)
+assert(trained.forward(vec(0, 0)) < 0.2)
+...
+```
+
+**What you learn:** Even though the architecture is now generic, the same 2-2-1 topology, sigmoid activations, and SGD learning loop still crack XOR. That validates the refactor: you gained composability without sacrificing behaviour.
+
 ## What's Next
 
-The four suites above built understanding one concept at a time: forward pass → sigmoid gradient → activations isolated → full backprop.
-
-The current `TwoLayerNN` is monolithic: the number of layers, activation function, and backprop logic are all hardwired. The next phase — **pytorchlite** — decomposes this into composable building blocks:
-
-- A `Neuron` with a pluggable activation
-- A `Layer` built from neurons
-- A `Network` built from layers
-
-The TDD sequence will follow the same pattern: start with the smallest unit (`Neuron` forward + backward), build up to `Layer`, then `Network`, and close with XOR passing through the composed structure.
+Phase 6 picks up from the new `Sequential` API and scales it horizontally: batched forward passes, vectorised gradient accumulation, and experiments with JVM performance characteristics. The goal is to keep treating the docs as a lab notebook—once batching lands, expect another round of tests + theory write-ups here.

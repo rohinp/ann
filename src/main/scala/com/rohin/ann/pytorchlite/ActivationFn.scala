@@ -20,5 +20,7 @@ object ActivationFn {
   object Sigmoid extends ActivationFn {
     def forward(x: Double) = 1.0 / (1.0 + math.exp(-x))
     def derivativeFromActivation(a: Double) = a * (1 - a)
+
+    override def toString(): String = "σ(x)"
   }
 }
