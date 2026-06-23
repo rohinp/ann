@@ -1,16 +1,14 @@
-package com.rohin.ann.pytorchlite
+package com.rohin.ann.pytorchlite.dense
 
-import org.apache.commons.math3.linear.RealMatrix
-import org.apache.commons.math3.linear.RealVector
-import org.apache.commons.math3.analysis.UnivariateFunction
-import org.apache.commons.math3.linear.Array2DRowRealMatrix
-import org.apache.commons.math3.linear.ArrayRealVector
+import com.rohin.ann.pytorchlite.sequential.Layer
+import com.rohin.ann.pytorchlite.{randomMatrix, zeroVec}
+import org.apache.commons.math3.linear.{RealMatrix, RealVector}
 
 final case class Dense private (
     W: RealMatrix,
     b: RealVector,
     activation: ActivationFn
-) {
+) extends Layer {
   override def toString: String = {
     def formatMatrix(m: RealMatrix): String =
       m.getData
@@ -29,25 +27,21 @@ final case class Dense private (
        |  b=${formatVector(b)}
        |)""".stripMargin
   }
+
+   def forward(input: RealVector): (RealVector, RealVector) = {
+    val z = W.operate(input).add(b)
+    val a = z.map(activation.forwardFn)
+    (z, a)
+  }
+
+  override def update(w: RealMatrix, b: RealVector): Layer = copy(W = w, b = b)
 }
 
 object Dense {
 
-  extension (dense: Dense)
-    def update(w: RealMatrix, b: RealVector): Dense = {
-      dense.copy(W = w, b = b)
-    }
-  extension (dl: Dense)
-    def forward(input: RealVector): (RealVector, RealVector) = {
-      val z = dl.W.operate(input).add(dl.b)
-      val a = z.map(dl.activation.forwardFn)
-      (z, a)
-    }
-
   def apply(inputSize: Int, outputSize: Int, act: ActivationFn): Dense = {
-    val rand = new scala.util.Random()
     val W = randomMatrix(outputSize, inputSize)
-    val b = randomVec(outputSize)
+    val b = zeroVec(outputSize)
     new Dense(W, b, act)
   }
 }

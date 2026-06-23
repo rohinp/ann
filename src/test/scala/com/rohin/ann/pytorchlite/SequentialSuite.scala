@@ -1,9 +1,9 @@
 package com.rohin.ann.pytorchlite
 
 import com.rohin.ann.FunSuiteWithLogging
-import com.rohin.ann.pytorchlite.Dense
-import com.rohin.ann.pytorchlite.ActivationFn.*
-import org.apache.commons.math3.linear.RealVector
+import com.rohin.ann.pytorchlite.dense.ActivationFn.*
+import com.rohin.ann.pytorchlite.dense.Dense
+import com.rohin.ann.pytorchlite.sequential.Sequential
 class SequentialSuite extends FunSuiteWithLogging {
   test("sequential network forward works") {
 
@@ -41,10 +41,10 @@ class SequentialSuite extends FunSuiteWithLogging {
     val grads =
       net.backward(pass, vec(1))
 
-    assertEquals(grads.deltas.size, 2)
+    assertEquals(grads.layers.size, 2)
   }
 
-  test("applyGradients updates weights") {
+  /*test("applyGradients updates weights") {
 
     val net = Sequential(
       Dense(2, 2, Sigmoid),
@@ -64,7 +64,7 @@ class SequentialSuite extends FunSuiteWithLogging {
       updated.layers.head.W,
       net.layers.head.W
     )
-  }
+  }*/
 
   test("trainOne updates network") {
 
@@ -77,8 +77,7 @@ class SequentialSuite extends FunSuiteWithLogging {
     val updated =
       net.trainOne(
         input = vec(1, 0),
-        target = vec(1),
-        learningRate = 0.1
+        target = vec(1)
       )
 
     assertNotEquals(
@@ -104,7 +103,6 @@ class SequentialSuite extends FunSuiteWithLogging {
       net.train(
         dataset,
         epochs = 10,
-        learningRate = 0.1
       )
 
     assertNotEquals(

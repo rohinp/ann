@@ -1,7 +1,7 @@
 package com.rohin.ann.pytorchlite
 
+import com.rohin.ann.pytorchlite.dense.{ActivationFn, Dense}
 import munit.FunSuite
-import com.rohin.ann.pytorchlite.Dense
 
 class DenseSuite extends FunSuite {
   test("dense layer forward produces output of correct size") {

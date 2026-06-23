@@ -1,0 +1,1677 @@
+Directory structure:
+└── .//
+    └── src/
+        ├── test/
+        │   └── scala/
+        │       └── com/
+        │           └── rohin/
+        │               └── ann/
+        │                   ├── ActivationSuite.scala
+        │                   ├── PerceptronSuite.scala
+        │                   ├── FunSuiteWithLogging.scala
+        │                   ├── PerceptronSuiteV1.scala
+        │                   ├── pytorchlite/
+        │                   │   ├── LossSuite.scala
+        │                   │   ├── XORWithSequentialSuite.scala
+        │                   │   ├── SequentialSuite.scala
+        │                   │   ├── DenseSuite.scala
+        │                   │   ├── LayerSuite.scala
+        │                   │   ├── FunSuitePlus.scala
+        │                   │   └── ActivationFnSuite.scala
+        │                   └── twolayer/
+        │                       └── TwoLayerNNSuite.scala
+        └── main/
+            └── scala/
+                └── com/
+                    └── rohin/
+                        └── ann/
+                            ├── Activation.scala
+                            ├── Perceptron.scala
+                            ├── PerceptronV1.scala
+                            ├── pytorchlite/
+                            │   ├── optimizer/
+                            │   │   ├── Gradients.scala
+                            │   │   ├── SGD.scala
+                            │   │   ├── LayerGradient.scala
+                            │   │   └── Optimizer.scala
+                            │   ├── ConsoleLogging.scala
+                            │   ├── loss/
+                            │   │   ├── MeanSquaredError.scala
+                            │   │   └── LossFunction.scala
+                            │   ├── sequential/
+                            │   │   ├── Sequential.scala
+                            │   │   ├── ForwardPass.scala
+                            │   │   └── Layer.scala
+                            │   ├── dense/
+                            │   │   ├── Dense.scala
+                            │   │   └── ActivationFn.scala
+                            │   └── package.scala
+                            └── twolayer/
+                                ├── ForwardCache.scala
+                                └── TwoLayerNN.scala
+
+================================================
+File: /src/test/scala/com/rohin/ann/ActivationSuite.scala
+================================================
+package com.rohin.ann
+
+import munit.FunSuite
+
+class ActivationSuite extends FunSuite {
+  import com.rohin.ann.Activation.*
+
+  test("sigmoid produces expected values") {
+
+    assertEquals(sigmoid(0), 0.5)
+    assert(sigmoid(10) > 0.99)
+    assert(sigmoid(-10) < 0.01)
+  }
+
+  test("sigmoid derivative is correct at 0") {
+    val s = sigmoid(0) // = 0.5
+    val d = sigmoidDerivative(0)
+
+    assertEquals(d, 0.25)
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/PerceptronSuite.scala
+================================================
+package com.rohin.ann
+
+import munit.FunSuite
+import org.apache.commons.math3.linear.{ArrayRealVector, RealVector}
+import com.rohin.ann.Perceptron
+
+class PerceptronSuite extends FunSuite {
+  import Perceptron.*
+
+  test("predict returns 1 when weighted sum is positive") {
+
+    val perceptron = create(bias = 0, weights = vec(1, 1))
+
+    val input = vec(1, 1)
+
+    val prediction = perceptron.predict(input)
+
+    assertEquals(prediction, 1)
+  }
+
+  test("predict returns 1 for boundry case") {
+
+    val perceptron = create(bias = 0, weights = vec(1, -1))
+
+    val input = vec(1, 1)
+
+    val prediction = perceptron.predict(input)
+
+    assertEquals(prediction, 1)
+  }
+
+  test("weights are updated when prediction is wrong") {
+
+    val perceptron = create(bias = 0, weights = vec(-1, -1), learningRate = 1.0)
+    val input = vec(1, 1)
+    val actual = 1
+
+    val updated = perceptron.trainOne(input, actual)
+
+    assertEquals(updated.weights, vec(0, 0))
+    assertEquals(updated.bias, 1d)
+  }
+
+  test("No update when prediction is correct") {
+
+    val perceptron = create(bias = 0, weights = vec(1, 1), learningRate = 1.0)
+    val input = vec(1, 1)
+    val actual = 1
+
+    val updated = perceptron.trainOne(input, actual)
+
+    assertEquals(updated.weights, vec(1, 1))
+    assertEquals(updated.bias, 0d)
+  }
+
+  test("perceptron learns AND gate") {
+
+    val data = List(
+      (vec(0, 0), 0),
+      (vec(0, 1), 0),
+      (vec(1, 0), 0),
+      (vec(1, 1), 1)
+    )
+
+    val initial = create(bias = 0, weights = zeroVec(2), learningRate = 1.0)
+
+    val trained = initial.train(data, epochs = 10)
+
+    assertEquals(trained.predict(vec(0, 0)), 0)
+    assertEquals(trained.predict(vec(0, 1)), 0)
+    assertEquals(trained.predict(vec(1, 0)), 0)
+    assertEquals(trained.predict(vec(1, 1)), 1)
+
+  }
+
+  test("perceptron learns OR gate") {
+
+    val data = List(
+      (vec(0, 0), 0),
+      (vec(0, 1), 1),
+      (vec(1, 0), 1),
+      (vec(1, 1), 1)
+    )
+
+    val initial = create(bias = 0, weights = zeroVec(2), learningRate = 1.0)
+
+    val trained = initial.train(data, epochs = 10)
+
+    assertEquals(trained.predict(vec(0, 0)), 0)
+    assertEquals(trained.predict(vec(0, 1)), 1)
+    assertEquals(trained.predict(vec(1, 0)), 1)
+    assertEquals(trained.predict(vec(1, 1)), 1)
+
+  }
+
+  /*
+  A single perceptron can only learn linearly separable data.
+  XOR is not linearly separable
+   */
+  test("perceptron learns XOR gate") {
+
+    val data = List(
+      (vec(0, 0), 0),
+      (vec(0, 1), 1),
+      (vec(1, 0), 1),
+      (vec(1, 1), 0)
+    )
+
+    val initial = create(bias = 0, weights = zeroVec(2), learningRate = 1.0)
+
+    val trained = initial.train(data, epochs = 10)
+
+    val correct = trained.predict(vec(0, 0)) == 0 &&
+      trained.predict(vec(0, 1)) == 1 &&
+      trained.predict(vec(1, 0)) == 1 &&
+      trained.predict(vec(1, 1)) == 0
+
+    assertEquals(correct, false)
+
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/FunSuiteWithLogging.scala
+================================================
+package com.rohin.ann
+
+import munit.FunSuite
+import com.rohin.ann.pytorchlite.ConsoleLogging.DebugConfig
+import com.rohin.ann.pytorchlite.ConsoleLogging.Position
+
+trait FunSuiteWithLogging extends FunSuite {
+  given dc: DebugConfig = DebugConfig(
+    position = Position.Both
+  )
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/PerceptronSuiteV1.scala
+================================================
+package com.rohin.ann
+
+import munit.FunSuite
+import org.apache.commons.math3.linear.{ArrayRealVector, RealVector}
+import com.rohin.ann.PerceptronV1
+
+class PerceptronSuiteV1 extends FunSuite {
+  import PerceptronV1.*
+
+  test("weights move in correct direction with sigmoid learning") {
+
+    val p = create(bias = 0, weights = vec(0, 0), learningRate = 1.0)
+
+    val updated = p.trainOne(input = vec(1, 1), y = 1)
+
+    /*
+    We are NOT asserting exact values.
+    Importnt: Only direction of change
+     */
+    // weights should increase
+    assert(updated.weights.getEntry(0) > 0)
+    assert(updated.weights.getEntry(1) > 0)
+
+    // bias should increase
+    assert(updated.bias > 0)
+  }
+
+  test("updates are smaller when prediction is confident") {
+
+    val p = create(bias = 0, weights = vec(5, 5), learningRate = 1.0)
+
+    val input = vec(1, 1)
+
+    val before = p.predictProb(input)
+
+    val updated = p.trainOne(input, 1)
+
+    val after = updated.predictProb(input)
+
+    // change should be small because already near 1
+    assert(Math.abs(after - before) < 0.01)
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/pytorchlite/LossSuite.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+import com.rohin.ann.pytorchlite.loss.{LossFunction, MeanSquaredError}
+
+class LossSuite extends FunSuitePlus {
+  test("output delta computed correctly") {
+
+    val loss:LossFunction = MeanSquaredError
+    val output = vec(0.5)
+    val target = vec(1.0)
+
+    val delta = loss.outputDelta(output, target)
+
+    assertClose(delta.getEntry(0), -0.125)
+  }
+
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/pytorchlite/XORWithSequentialSuite.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+import com.rohin.ann.FunSuiteWithLogging
+import com.rohin.ann.pytorchlite.dense.ActivationFn.*
+import org.apache.commons.math3.linear.RealVector
+import com.rohin.ann.pytorchlite.ConsoleLogging.DebugConfig
+import com.rohin.ann.pytorchlite.dense.Dense
+import com.rohin.ann.pytorchlite.sequential.Sequential
+
+class XORWithSequentialSuite extends FunSuiteWithLogging {
+
+  test("network learns xor") {
+
+    val xor = List(
+        (vec(0, 0), vec(0)),
+        (vec(0, 1), vec(1)),
+        (vec(1, 0), vec(1)),
+        (vec(1, 1), vec(0))
+      )
+
+    val net = Sequential(
+        Dense(2, 2, Sigmoid),
+        Dense(2, 1, Sigmoid)
+      )
+
+    val trained = net.train(
+      xor,
+      epochs =10500,
+      learningRate = 0.25
+    )
+
+    println(
+      s"trained.forward(vec(0, 0)) < 0.2 = ${trained.forward(vec(0, 0))} = " + (trained
+        .forward(vec(0, 0)) < 0.2)
+    )
+    println(
+      s"trained.forward(vec(0, 1)) > 0.8 = ${trained.forward(vec(0, 1))} = " + (trained
+        .forward(vec(0, 1)) > 0.8)
+    )
+    println(
+      s"trained.forward(vec(1, 0)) > 0.8 = ${trained.forward(vec(1, 0))} = " + (trained
+        .forward(vec(1, 0)) > 0.8)
+    )
+    println(
+      s"trained.forward(vec(1, 1)) < 0.2 = ${trained.forward(vec(1, 1))} = " + (trained
+        .forward(vec(1, 1)) < 0.2)
+    )
+
+    assert(trained.forward(vec(0, 0)) < 0.2)
+    assert(trained.forward(vec(0, 1)) > 0.8)
+    assert(trained.forward(vec(1, 0)) > 0.8)
+    assert(trained.forward(vec(1, 1)) < 0.2)
+  }
+
+  test("network learns xor with ReLU") {
+
+    val xor = List(
+      (vec(0, 0), vec(0)),
+      (vec(0, 1), vec(1)),
+      (vec(1, 0), vec(1)),
+      (vec(1, 1), vec(0))
+    )
+
+    val net = Sequential(
+      Dense(2, 2, ReLU),
+      Dense(2, 1, Sigmoid)
+    )
+
+    val trained = net.train(
+      xor,
+      epochs = 2000,
+      learningRate = 0.2
+    )
+
+    println(
+      s"trained.forward(vec(0, 0)) < 0.2 = ${trained.forward(vec(0, 0))} = " + (trained
+        .forward(vec(0, 0)) < 0.2)
+    )
+    println(
+      s"trained.forward(vec(0, 1)) > 0.8 = ${trained.forward(vec(0, 1))} = " + (trained
+        .forward(vec(0, 1)) > 0.8)
+    )
+    println(
+      s"trained.forward(vec(1, 0)) > 0.8 = ${trained.forward(vec(1, 0))} = " + (trained
+        .forward(vec(1, 0)) > 0.8)
+    )
+    println(
+      s"trained.forward(vec(1, 1)) < 0.2 = ${trained.forward(vec(1, 1))} = " + (trained
+        .forward(vec(1, 1)) < 0.2)
+    )
+
+    assert(trained.forward(vec(0, 0)) < 0.2)
+    assert(trained.forward(vec(0, 1)) > 0.8)
+    assert(trained.forward(vec(1, 0)) > 0.8)
+    assert(trained.forward(vec(1, 1)) < 0.2)
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/pytorchlite/SequentialSuite.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+import com.rohin.ann.FunSuiteWithLogging
+import com.rohin.ann.pytorchlite.dense.ActivationFn.*
+import com.rohin.ann.pytorchlite.dense.Dense
+import com.rohin.ann.pytorchlite.sequential.Sequential
+import org.apache.commons.math3.linear.RealVector
+class SequentialSuite extends FunSuiteWithLogging {
+  test("sequential network forward works") {
+
+    val net = Sequential(
+      Dense(2, 2, Sigmoid),
+      Dense(2, 1, Sigmoid)
+    )
+
+    val output = net.forward(vec(1, 0))
+
+    assert(output > 0.0 && output < 1.0)
+  }
+
+  test("forward pass stores activations and zs") {
+
+    val net = Sequential(
+      Dense(2, 2, Sigmoid),
+      Dense(2, 1, Sigmoid)
+    )
+
+    val pass = net.forwardPass(vec(1, 0))
+
+    assertEquals(pass.activations.size, 3)
+    assertEquals(pass.zs.size, 2)
+  }
+
+  test("backward pass computes deltas for all layers") {
+
+    val net = Sequential(
+      Dense(2, 2, Sigmoid),
+      Dense(2, 1, Sigmoid)
+    )
+
+    val pass = net.forwardPass(vec(1, 0))
+    val grads =
+      net.backward(pass, vec(1))
+
+    assertEquals(grads.deltas.size, 2)
+  }
+
+  test("applyGradients updates weights") {
+
+    val net = Sequential(
+      Dense(2, 2, Sigmoid),
+      Dense(2, 1, Sigmoid)
+    )
+
+    val pass =
+      net.forwardPass(vec(1, 0))
+
+    val grads =
+      net.backward(pass, vec(1))
+
+    val updated =
+      net.applyGradients(pass, grads, learningRate = 0.1)
+
+    assertNotEquals(
+      updated.layers.head.W,
+      net.layers.head.W
+    )
+  }
+
+  test("trainOne updates network") {
+
+    val net =
+      Sequential(
+        Dense(2, 2, Sigmoid),
+        Dense(2, 1, Sigmoid)
+      )
+
+    val updated =
+      net.trainOne(
+        input = vec(1, 0),
+        target = vec(1),
+        learningRate = 0.1
+      )
+
+    assertNotEquals(
+      updated.layers.head.W,
+      net.layers.head.W
+    )
+  }
+
+  test("train performs multiple updates") {
+
+    val net =
+      Sequential(
+        Dense(2, 2, Sigmoid),
+        Dense(2, 1, Sigmoid)
+      )
+
+    val dataset =
+      List(
+        (vec(1, 0), vec(1))
+      )
+
+    val trained =
+      net.train(
+        dataset,
+        epochs = 10,
+        learningRate = 0.1
+      )
+
+    assertNotEquals(
+      trained.layers.head.W,
+      net.layers.head.W
+    )
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/pytorchlite/DenseSuite.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+import com.rohin.ann.pytorchlite.dense.{ActivationFn, Dense}
+import munit.FunSuite
+
+class DenseSuite extends FunSuite {
+  test("dense layer forward produces output of correct size") {
+
+    val layer =
+      Dense(inputSize = 2, outputSize = 3, act = ActivationFn.Sigmoid)
+
+    val input = vec(1, 0)
+
+    val output = layer.forward(input)._2
+
+    assertEquals(output.getDimension, 3)
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/pytorchlite/LayerSuite.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+import com.rohin.ann.FunSuiteWithLogging
+import com.rohin.ann.pytorchlite.dense.ActivationFn.*
+import com.rohin.ann.pytorchlite.ConsoleLogging.DebugConfig
+import com.rohin.ann.pytorchlite.dense.Dense
+import com.rohin.ann.pytorchlite.loss.{LossFunction, MeanSquaredError}
+import com.rohin.ann.pytorchlite.sequential.Layer
+import org.apache.commons.math3.linear.RealVector
+
+class LayerSuite extends FunSuiteWithLogging {
+
+  test("layer can perform forward pass") {
+
+    val layer: Layer =
+      Dense(2, 2, Sigmoid)
+
+    val result =
+      layer.forward(vec(1, 0))
+
+    assertEquals(result._2.getDimension, 2)
+  }
+
+  test("layer can perform forward pass") {
+
+    val layer: Layer =
+      Dense(2, 2, Sigmoid)
+
+    val result =
+      layer.forward(vec(1, 0))
+
+    assertEquals(result._2.getDimension, 2)
+  }
+
+  test("mse computes output delta") {
+
+    val loss: LossFunction =
+      MeanSquaredError
+
+    val delta =
+      loss.outputDelta(
+        vec(0.5),
+        vec(1)
+      )
+
+    assert(delta.getDimension == 1)
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/pytorchlite/FunSuitePlus.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+import munit.FunSuite
+
+trait FunSuitePlus extends FunSuite {
+  def assertClose(
+      expected: Double,
+      obtained: Double,
+      tolerance: Double = 0.001
+  ): Unit = {
+    assert(
+      Math.abs(expected - obtained) < tolerance,
+      s"$obtained was not close to $expected"
+    )
+  }
+
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/pytorchlite/ActivationFnSuite.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+import munit.FunSuite
+
+class ActivationFnSuite extends FunSuite {
+  import com.rohin.ann.pytorchlite.dense.ActivationFn.*
+
+  test("sigmoid activation works") {
+    val s = Sigmoid
+    assertEquals(s.forward(0), 0.5)
+    assertEquals(s.derivativeFromActivation(0.5), 0.25)
+  }
+
+  test("relu activation works") {
+
+    assertEquals(ReLU.forward(-5), 0.0)
+    assertEquals(ReLU.forward(0), 0.0)
+    assertEquals(ReLU.forward(5), 5.0)
+
+  }
+
+  test("relu derivative works") {
+
+    assertEquals(
+      ReLU.derivativeFromActivation(0),
+      0.0
+    )
+
+    assertEquals(
+      ReLU.derivativeFromActivation(5),
+      1.0
+    )
+  }
+}
+
+
+================================================
+File: /src/test/scala/com/rohin/ann/twolayer/TwoLayerNNSuite.scala
+================================================
+package com.rohin.ann.twolayer
+
+import munit.FunSuite
+import org.apache.commons.math3.linear.RealVector
+import com.rohin.ann.twolayer.TwoLayerNN
+
+class TwoLayerNNSuite extends FunSuite {
+  import TwoLayerNN.*
+
+  test("two layer network produces output between 0 and 1") {
+    val nn = TwoLayerNN.create(
+      inputSize = 2,
+      hiddenSize = 2
+    )
+
+    val output = nn.forward(vec(1, 0)).a2
+
+    assert(output > 0.0 && output < 1.0)
+  }
+
+  test("output delta is computed correctly") {
+
+    val a2 = 0.5
+    val y = 1
+
+    val delta = computeOutputDelta(a2, y)
+
+    assertEquals(delta, -0.125)
+  }
+
+  test("output weights move in correct direction") {
+
+    val nn = TwoLayerNN.create(
+      inputSize = 2,
+      hiddenSize = 2
+    )
+
+    val a1 = vec(0.5, 0.5)
+    val a2 = 0.5
+    val y = 1
+
+    val updated = nn.updateOutputLayer(a1, a2, y)
+
+    // weights should increase
+    assert(updated.W2.getEntry(0) > nn.W2.getEntry(0))
+    assert(updated.W2.getEntry(1) > nn.W2.getEntry(1))
+
+    // bias should increase
+    assert(updated.b2 > nn.b2)
+  }
+
+  test("hidden delta is computed correctly") {
+
+    val W2 = vec(1, 1)
+    val delta2 = -0.125
+    val a1 = vec(0.5, 0.5)
+
+    val delta1 = computeHiddenDelta(W2, delta2, a1)
+
+    assertEquals(delta1.getEntry(0), -0.03125)
+    assertEquals(delta1.getEntry(1), -0.03125)
+  }
+
+  test("hidden layer weights update correctly") {
+
+    val nn = TwoLayerNN.create(
+      inputSize = 2,
+      hiddenSize = 2
+    )
+
+    val input = vec(1, 1)
+    val delta1 = vec(-0.03125, -0.03125)
+
+    val updated = nn.updateHiddenLayer(delta1, input)
+
+    // weights should increase
+    assert(updated.W1.getEntry(0, 0) > nn.W1.getEntry(0, 0))
+    assert(updated.W1.getEntry(1, 1) > nn.W1.getEntry(1, 1))
+
+    // bias should increase
+    assert(updated.b1.getEntry(0) > nn.b1.getEntry(0))
+    assert(updated.b1.getEntry(1) > nn.b1.getEntry(1))
+  }
+
+  test("two layer network learns XOR") {
+
+    val data = List(
+      (vec(0, 0), 0),
+      (vec(0, 1), 1),
+      (vec(1, 0), 1),
+      (vec(1, 1), 0)
+    )
+
+    val nn = TwoLayerNN.create(inputSize = 2, hiddenSize = 2, lr = 0.5)
+
+    val trained = nn.train(data, epochs = 10000)
+
+    /*
+    Asserting when we get very close to the actual prediction of values, not exact.
+     */
+    assert(math.abs(trained.forward(vec(0, 0)).a2 - 0) <= 0.1)
+    assert(
+      trained.forward(vec(0, 1)).a2 > 0.9 && trained.forward(vec(0, 1)).a2 < 1.0
+    )
+    assert(
+      trained.forward(vec(1, 0)).a2 > 0.9 && trained.forward(vec(1, 0)).a2 < 1.0
+    )
+    assert(math.abs(trained.forward(vec(1, 1)).a2 - 0) <= 0.1)
+  }
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/Activation.scala
+================================================
+package com.rohin.ann
+
+object Activation {
+
+  // 𝜎(𝑥)
+  def sigmoid(z: Double): Double =
+    1.0 / (1.0 + Math.exp(-z))
+
+  // 𝜎(𝑥)⋅(1−𝜎(𝑥))
+  def sigmoidDerivative(z: Double): Double =
+    val s = sigmoid(z)
+    s * (1 - s)
+
+  def sigmoidDerivativeFromActivation(a: Double): Double =
+    a * (1 - a)
+
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/Perceptron.scala
+================================================
+package com.rohin.ann
+
+import org.apache.commons.math3.linear.{ArrayRealVector, RealVector}
+import scala.annotation.tailrec
+import javax.print.DocFlavor.READER
+
+case class Perceptron private (
+    weights: RealVector,
+    bias: Double,
+    learningRate: Double
+)
+
+object Perceptron {
+
+  def vec(xs: Double*): RealVector =
+    new ArrayRealVector(xs.toArray)
+
+  def zeroVec(size: Int): RealVector =
+    new ArrayRealVector(size)
+
+  // With default learning rate
+  def create(bias: Double, weights: RealVector): Perceptron =
+    new Perceptron(weights, bias, 0.001)
+
+  def create(
+      bias: Double,
+      weights: RealVector,
+      learningRate: Double
+  ): Perceptron =
+    new Perceptron(weights, bias, learningRate)
+
+  def step(z: Double): Int =
+    if (z >= 0) 1 else 0
+
+  extension (perceptron: Perceptron)
+    def predict(input: RealVector): Int =
+      step(perceptron.weights.dotProduct(input) + perceptron.bias)
+  extension (perceptron: Perceptron)
+    def updateAllWeights(step: Double, ys: RealVector): Perceptron =
+      // Create an initial safe copy
+      val workingWeights = perceptron.weights.copy()
+
+      // Perform fast, mutating updates during the training loop
+      perceptron.copy(
+        weights = workingWeights.combine(1, step, ys)
+      )
+
+  extension (perceptron: Perceptron)
+    def updateBias(updateMagnitude: Double): Perceptron =
+      perceptron.copy(
+        bias = perceptron.bias + updateMagnitude
+      )
+
+  extension (perceptron: Perceptron)
+    def trainOne(input: RealVector, actual: Int): Perceptron =
+      val predicted = perceptron.predict(input)
+      val error = actual - predicted
+
+      if error == 0 then perceptron
+      else
+        val updateMagnitude = perceptron.learningRate * error
+        perceptron
+          .updateAllWeights(updateMagnitude, input)
+          .updateBias(updateMagnitude)
+
+  extension (perceptron: Perceptron)
+    def train(dataset: List[(RealVector, Int)], epochs: Int): Perceptron =
+      @tailrec
+      def loop(iterate: Int, p: Perceptron): Perceptron =
+        if (iterate == 0) then p
+        else
+          loop(
+            iterate - 1,
+            dataset.foldLeft(p) { case (acc, (input, actual)) =>
+              acc.trainOne(input, actual)
+            }
+          )
+      loop(epochs, perceptron)
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/PerceptronV1.scala
+================================================
+package com.rohin.ann
+
+import org.apache.commons.math3.linear.{ArrayRealVector, RealVector}
+import scala.annotation.tailrec
+import Activation.*
+
+case class PerceptronV1 private (
+    weights: RealVector, // [W1,w2,...,Wn]
+    bias: Double,
+    learningRate: Double
+)
+
+object PerceptronV1 {
+
+  def vec(xs: Double*): RealVector =
+    new ArrayRealVector(xs.toArray)
+
+  def zeroVec(size: Int): RealVector =
+    new ArrayRealVector(size)
+
+  // With default learning rate
+  def create(bias: Double, weights: RealVector): PerceptronV1 =
+    new PerceptronV1(weights, bias, 0.001)
+
+  def create(
+      bias: Double,
+      weights: RealVector,
+      learningRate: Double
+  ): PerceptronV1 =
+    new PerceptronV1(weights, bias, learningRate)
+
+  def step(z: Double): Int =
+    if (z >= 0) 1 else 0
+
+  extension (perceptronV1: PerceptronV1)
+    def predictProb(input: RealVector): Double =
+      val z = perceptronV1.weights.dotProduct(input) + perceptronV1.bias
+      sigmoid(z)
+
+  // w = w + η * (y - a) * x
+  extension (perceptronV1: PerceptronV1)
+    def updateAllWeights(step: Double, input: RealVector): PerceptronV1 =
+      // Create an initial safe copy
+      val workingWeights = perceptronV1.weights.copy()
+
+      // Perform fast, mutating updates during the training loop
+      perceptronV1.copy(
+        weights = workingWeights.combine(1, step, input)
+      )
+
+  // b = b + η * (y - a)
+  extension (perceptronV1: PerceptronV1)
+    def updateBias(updateMagnitude: Double): PerceptronV1 =
+      perceptronV1.copy(
+        bias = perceptronV1.bias + updateMagnitude
+      )
+
+  extension (perceptronV1: PerceptronV1)
+    def trainOne(input: RealVector, y: Int): PerceptronV1 =
+      val a = perceptronV1.predictProb(input) // sigmoid
+      val error = y - a
+      // η * (y - a)
+      val grad = error * a * (1 - a)
+      val updateMagnitude = perceptronV1.learningRate * grad
+      perceptronV1
+        .updateAllWeights(updateMagnitude, input)
+        .updateBias(updateMagnitude)
+
+  extension (perceptronV1: PerceptronV1)
+    def train(dataset: List[(RealVector, Int)], epochs: Int): PerceptronV1 =
+      @tailrec
+      def loop(iterate: Int, p: PerceptronV1): PerceptronV1 =
+        if (iterate == 0) then p
+        else
+          loop(
+            iterate - 1,
+            dataset.foldLeft(p) { case (acc, (input, actual)) =>
+              acc.trainOne(input, actual)
+            }
+          )
+      loop(epochs, perceptronV1)
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/optimizer/Gradients.scala
+================================================
+package com.rohin.ann.pytorchlite.optimizer
+
+import org.apache.commons.math3.linear.RealVector
+
+case class Gradients(
+                      layers: List[LayerGradient]
+                    )
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/optimizer/SGD.scala
+================================================
+package com.rohin.ann.pytorchlite.optimizer
+
+import com.rohin.ann.pytorchlite.dense.Dense
+
+case class SGD(
+                learningRate: Double
+              ) extends Optimizer {
+
+  def step(
+            layers: List[Dense],
+            gradients: Gradients
+          ): List[Dense] =
+
+    layers
+      .zip(gradients.layers)
+      .map {
+        case (layer, grad) =>
+
+          val newW =
+            layer.W.subtract(
+              grad.dW.scalarMultiply(learningRate)
+            )
+
+          val newB =
+            layer.b.subtract(
+              grad.dB.mapMultiply(learningRate)
+            )
+
+          layer.update(
+            newW,
+            newB
+          )
+      }
+}
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/optimizer/LayerGradient.scala
+================================================
+package com.rohin.ann.pytorchlite.optimizer
+
+import org.apache.commons.math3.linear.{RealMatrix, RealVector}
+
+case class LayerGradient(
+                          dW: RealMatrix,
+                          dB: RealVector
+                        )
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/optimizer/Optimizer.scala
+================================================
+package com.rohin.ann.pytorchlite.optimizer
+
+import com.rohin.ann.pytorchlite.dense.Dense
+
+trait Optimizer {
+
+  def step(
+            layers: List[Dense],
+            gradients: Gradients
+          ): List[Dense]
+
+}
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/ConsoleLogging.scala
+================================================
+package com.rohin.ann.pytorchlite
+
+object ConsoleLogging {
+  enum Position:
+    case Top, Bottom, Both, No
+
+  case class DebugConfig(
+      isEnabled: Boolean = false,
+      sapatator: String = "_",
+      position: Position = Position.No,
+      sapatatorCount: Int = 100
+  )
+
+  def log(str: String)(using ds: DebugConfig): Unit = {
+    ds match {
+      case DebugConfig(false, sapatator, position, sapatatorCount) =>
+        ()
+      case DebugConfig(true, sapatator, Position.No, sapatatorCount) =>
+        println(str)
+      case DebugConfig(true, sapatator, Position.Top, sapatatorCount) =>
+        println(s"""
+            |${sapatator * sapatatorCount}
+            |$str
+            |""".stripMargin)
+      case DebugConfig(true, sapatator, Position.Bottom, sapatatorCount) =>
+        println(s"""
+            |$str
+            |${sapatator * sapatatorCount}
+            |""".stripMargin)
+      case DebugConfig(true, sapatator, Position.Both, sapatatorCount) =>
+        println(s"""
+            |${sapatator * sapatatorCount}
+            |$str
+            |${sapatator * sapatatorCount}
+            |""".stripMargin)
+    }
+  }
+
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/loss/MeanSquaredError.scala
+================================================
+package com.rohin.ann.pytorchlite.loss
+
+import com.rohin.ann.pytorchlite.loss.LossFunction
+import org.apache.commons.math3.linear.RealVector
+
+object MeanSquaredError extends LossFunction {
+
+  def outputDelta(
+      output: RealVector,
+      target: RealVector
+  ): RealVector = {
+
+    val result = output.copy()
+
+    for (i <- 0 until output.getDimension) {
+      val a = output.getEntry(i)
+      val y = target.getEntry(i)
+
+      result.setEntry(
+        i,
+        (a - y) * (a * (1 - a))
+      )
+    }
+
+    result
+  }
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/loss/LossFunction.scala
+================================================
+package com.rohin.ann.pytorchlite.loss
+
+import org.apache.commons.math3.linear.RealVector
+
+trait LossFunction {
+
+  def outputDelta(
+                   output: RealVector,
+                   target: RealVector
+                 ): RealVector
+
+}
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/sequential/Sequential.scala
+================================================
+package com.rohin.ann.pytorchlite.sequential
+
+import com.rohin.ann.pytorchlite.{optimizer, *}
+import com.rohin.ann.pytorchlite.ConsoleLogging.{DebugConfig, log}
+import com.rohin.ann.pytorchlite.dense.Dense
+import com.rohin.ann.pytorchlite.loss.{LossFunction, MeanSquaredError}
+import com.rohin.ann.pytorchlite.optimizer.{Gradients, Optimizer, SGD}
+import org.apache.commons.math3.linear.{RealMatrix, RealVector}
+
+import scala.annotation.tailrec
+
+case class Sequential(
+                       layers: List[Dense],
+                       loss: LossFunction = MeanSquaredError,
+                       optimizer: Optimizer = SGD(0.1)
+                     ) {
+
+  def forward(input: RealVector): Double = {
+
+    @tailrec
+    def loop(layers: List[Layer], current: RealVector): RealVector =
+      layers match {
+        case Nil =>
+          current
+
+        case layer :: remaining =>
+          val (_, a) = layer.forward(current)
+          loop(remaining, a)
+      }
+
+    loop(layers, input).getEntry(0)
+  }
+
+  def forwardPass(input: RealVector): ForwardPass = {
+
+    @tailrec
+    def loop(
+              layers: List[Layer],
+              currentActivation: RealVector,
+              zsAcc: Vector[RealVector],
+              activationsAcc: Vector[RealVector]
+            ): ForwardPass =
+      layers match {
+        case Nil => ForwardPass(zsAcc.toList, activationsAcc.toList)
+        case layer :: remaining =>
+          val (z, a) = layer.forward(currentActivation)
+          loop(remaining, a, zsAcc :+ z, activationsAcc :+ a)
+      }
+
+    loop(layers, input, Vector.empty, Vector(input)
+    )
+  }
+
+  def backward(pass: ForwardPass, target: RealVector): Gradients = {
+    val outputDelta: RealVector =
+      loss.outputDelta(
+        pass.activations.last,
+        target
+      )
+
+    var deltas = List(outputDelta)
+
+    for (l <- layers.length - 2 to 0 by -1) {
+
+      val nextLayer = layers(l + 1)
+      val nextDelta = deltas.head
+
+      val propagated =
+        nextLayer.W.transpose().operate(nextDelta)
+
+      val activation =
+        pass.activations(l + 1)
+
+      val grad =
+        activation.map(a =>
+          layers(l)
+            .activation
+            .derivativeFromActivation(a)
+        )
+
+      val delta =
+        propagated.ebeMultiply(grad)
+
+      deltas = delta :: deltas
+    }
+
+    Gradients(deltas)
+  }
+
+  def applyGradients(
+                      pass: ForwardPass,
+                      grads: Gradients,
+                      learningRate: Double
+                    )(using dc: DebugConfig): Sequential = {
+    val updatedLayers =
+      layers.zipWithIndex.map {
+        case (layer, l) =>
+
+          log("layer = " + l)
+
+          val prevActivation =
+            pass.activations(l)
+
+          log("prevActivation = " + prevActivation)
+
+          val delta =
+            grads.deltas(l)
+
+          log("delta = " + delta)
+          val gradW =
+            delta.outerProduct(prevActivation)
+
+          log("gradW = " + gradW)
+
+          val newW: RealMatrix =
+            layer.W.subtract(
+              gradW.scalarMultiply(learningRate)
+            )
+
+          log("newW = " + newW)
+
+          val newB: RealVector =
+            layer.b.subtract(
+              delta.mapMultiply(learningRate)
+            )
+
+          log("newB = " + newB)
+
+          layer.update(newW, newB)
+      }
+
+    copy(layers = updatedLayers)
+  }
+
+  def trainOne(
+                input: RealVector,
+                target: RealVector
+              ): Sequential = {
+
+    val pass =
+      forwardPass(input)
+
+    val grads =
+      backward(pass, target)
+
+    val updatedLayers =
+      optimizer.step(
+        layers,
+        grads
+      )
+
+    copy(
+      layers = updatedLayers
+    )
+  }
+
+  def train(
+             dataset: List[(RealVector, RealVector)],
+             epochs: Int,
+             learningRate: Double
+           )(using dc: DebugConfig): Sequential = {
+
+    @tailrec
+    def loop(
+              remaining: Int,
+              current: Sequential
+            ): Sequential =
+
+      if remaining == 0 then current
+      else
+
+        val updated =
+          dataset.foldLeft(current) { case (net, (input, target)) =>
+            net.trainOne(
+              input,
+              target,
+              learningRate
+            )
+          }
+
+        loop(
+          remaining - 1,
+          updated
+        )
+
+    loop(epochs, this)
+  }
+
+}
+
+object Sequential {
+
+  def apply(ds: Dense*) =
+    new Sequential(ds.toList)
+
+
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/sequential/ForwardPass.scala
+================================================
+package com.rohin.ann.pytorchlite.sequential
+
+import org.apache.commons.math3.linear.RealVector
+
+case class ForwardPass(
+    zs: List[RealVector],
+    activations: List[RealVector]
+) {
+  override def toString: String = {
+    def formatVector(v: RealVector): String =
+      v.toArray.map(x => f"$x% .4f").mkString("[", ", ", "]")
+
+    val zsStr =
+      zs.zipWithIndex
+        .map { case (z, i) =>
+          s"z[$i]=${formatVector(z)}"
+        }
+        .mkString("\n    ")
+
+    val activationsStr =
+      activations.zipWithIndex
+        .map { case (a, i) =>
+          s"a[$i]=${formatVector(a)}"
+        }
+        .mkString("\n    ")
+
+    s"""ForwardPass(
+         |  zs=
+         |    $zsStr,
+         |
+         |  activations=
+         |    $activationsStr
+         |)""".stripMargin
+  }
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/sequential/Layer.scala
+================================================
+package com.rohin.ann.pytorchlite.sequential
+
+import com.rohin.ann.pytorchlite.dense.ActivationFn
+import org.apache.commons.math3.linear.{RealMatrix, RealVector}
+
+trait Layer {
+  val W: RealMatrix
+  val b: RealVector
+  val activation: ActivationFn
+  def forward(input: RealVector): (RealVector, RealVector)
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/dense/Dense.scala
+================================================
+package com.rohin.ann.pytorchlite.dense
+
+import com.rohin.ann.pytorchlite.sequential.Layer
+import com.rohin.ann.pytorchlite.{randomMatrix, zeroVec}
+import org.apache.commons.math3.linear.{RealMatrix, RealVector}
+
+final case class Dense private (
+    W: RealMatrix,
+    b: RealVector,
+    activation: ActivationFn
+) extends Layer {
+  override def toString: String = {
+    def formatMatrix(m: RealMatrix): String =
+      m.getData
+        .map(_.map(v => f"$v% .4f").mkString("[", ", ", "]"))
+        .mkString("\n    ")
+
+    def formatVector(v: RealVector): String =
+      v.toArray.map(x => f"$x% .4f").mkString("[", ", ", "]")
+
+    s"""Dense(
+       |  in=${W.getColumnDimension},
+       |  out=${W.getRowDimension},
+       |  activation=$activation,
+       |  W=
+       |    ${formatMatrix(W)},
+       |  b=${formatVector(b)}
+       |)""".stripMargin
+  }
+
+  override def forward(input: RealVector): (RealVector, RealVector) = {
+    val z = W.operate(input).add(b)
+    val a = z.map(activation.forwardFn)
+    (z, a)
+  }
+}
+
+object Dense {
+
+  extension (dense: Dense)
+    def update(w: RealMatrix, b: RealVector): Dense = {
+      dense.copy(W = w, b = b)
+    }
+
+
+  def apply(inputSize: Int, outputSize: Int, act: ActivationFn): Dense = {
+    val W = randomMatrix(outputSize, inputSize)
+    val b = zeroVec(outputSize)
+    new Dense(W, b, act)
+  }
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/dense/ActivationFn.scala
+================================================
+package com.rohin.ann.pytorchlite.dense
+
+import org.apache.commons.math3.analysis.UnivariateFunction
+
+trait ActivationFn {
+  def forward(x: Double): Double
+  /*
+    Special case because if a map
+    ```z1.map(ActivationFn.forward)```
+    is used scala compiler tries to eta-expantion but it is not a java function type.
+    Compilation fails and it makes scala compiler go bonkers.
+   */
+  def forwardFn: UnivariateFunction = (z: Double) => forward(z)
+
+  def derivativeFromActivation(a: Double): Double
+}
+object ActivationFn {
+  object Sigmoid extends ActivationFn {
+    def forward(x: Double): Double = 1.0 / (1.0 + math.exp(-x))
+    def derivativeFromActivation(a: Double): Double = a * (1 - a)
+
+    override def toString: String = "σ(x)"
+  }
+
+  object ReLU extends ActivationFn {
+
+    override def forward(x: Double): Double = Math.max(0,x)
+
+    override def derivativeFromActivation(a: Double): Double = if a > 0 then 1 else 0
+
+    override def toString: String = "ReLU(x)"
+  }
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/pytorchlite/package.scala
+================================================
+package com.rohin.ann
+
+import org.apache.commons.math3.linear.RealVector
+import org.apache.commons.math3.linear.ArrayRealVector
+import scala.util.Random
+import org.apache.commons.math3.linear.RealMatrix
+import org.apache.commons.math3.linear.Array2DRowRealMatrix
+
+package object pytorchlite {
+  def vec(xs: Double*): RealVector =
+    new ArrayRealVector(xs.toArray)
+
+  def zeroVec(size: Int): RealVector =
+    new ArrayRealVector(size)
+
+  def randomVec(size: Int): RealVector = {
+    val rng = new Random(42)
+    new ArrayRealVector(Array.fill(size)(rng.nextDouble() - 0.5))
+  }
+
+  def randomMatrix(rows: Int, cols: Int): RealMatrix = {
+    val matrix = Array2DRowRealMatrix(rows, cols)
+    for i <- 0 until rows do matrix.setRowVector(i, randomVec(cols))
+    matrix
+  }
+}
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/twolayer/ForwardCache.scala
+================================================
+package com.rohin.ann.twolayer
+
+import org.apache.commons.math3.linear.RealVector
+
+case class ForwardCache(
+    z1: RealVector,
+    a1: RealVector,
+    z2: Double,
+    a2: Double
+)
+
+
+================================================
+File: /src/main/scala/com/rohin/ann/twolayer/TwoLayerNN.scala
+================================================
+package com.rohin.ann.twolayer
+
+import org.apache.commons.math3.linear.RealMatrix
+import org.apache.commons.math3.linear.RealVector
+import org.apache.commons.math3.linear.ArrayRealVector
+import scala.util.Random
+import org.apache.commons.math3.linear.Array2DRowRealMatrix
+import org.apache.commons.math3.analysis.UnivariateFunction
+import com.rohin.ann.Activation
+import scala.annotation.tailrec
+
+case class TwoLayerNN private (
+    W1: RealMatrix, // hidden layer weights
+    b1: RealVector,
+    W2: RealVector, // output weights
+    b2: Double,
+    learningRate: Double
+)
+
+object TwoLayerNN {
+
+  def vec(xs: Double*): RealVector =
+    new ArrayRealVector(xs.toArray)
+
+  def randomVec(size: Int): RealVector =
+    new ArrayRealVector(Array.fill(size)(Random.between(0d, 1d)))
+
+  def randomMatrix(rows: Int, cols: Int): RealMatrix = {
+    val matrix = Array2DRowRealMatrix(rows, cols)
+    for i <- (0 until rows) do matrix.setRowVector(i, randomVec(cols))
+    matrix
+  }
+
+  def create(inputSize: Int, hiddenSize: Int, lr: Double = 1) = {
+    val w1 = randomMatrix(inputSize, hiddenSize)
+    val b1 = randomVec(hiddenSize)
+    val w2 = randomVec(hiddenSize)
+    val b2 = Random.between(0d, 1d)
+    TwoLayerNN(W1 = w1, b1 = b1, W2 = w2, b2 = b2, lr)
+  }
+
+  extension (nn: TwoLayerNN)
+    def forward(input: RealVector): ForwardCache = {
+      /*Step 1:
+        z₁ = W₁ · x + b₁
+        a₁ = sigmoid(z₁)
+       */
+      val z1 = nn.W1.operate(input).add(nn.b1)
+      /*
+          Special case because if a map
+          ```z1.map(ActivationFn.forward)```
+          is used scala compiler tries to eta-expantion but it is not a java function type.
+          Compilation fails and it makes scala compiler go bonkers.
+       */
+      val sigmoidFn = new UnivariateFunction {
+        def value(z: Double): Double = Activation.sigmoid(z)
+      }
+      val a1 = z1.map(sigmoidFn)
+      /*Step 2:
+        z₂ = W₂ · a₁ + b₂
+        a₂ = sigmoid(z₂)
+       */
+      val z2 = nn.W2.dotProduct(a1) + nn.b2
+      val a2 = Activation.sigmoid(z2)
+      ForwardCache(
+        z1 = z1,
+        a1 = a1,
+        z2 = z2,
+        a2 = a2
+      )
+    }
+
+  def computeOutputDelta(a2: Double, y: Int): Double = {
+    /*
+    (a₂ - y) → how wrong you are
+    a₂(1-a₂) → how sensitive the neuron is
+     */
+    val error = a2 - y
+    val grad = a2 * (1 - a2)
+    error * grad
+  }
+
+  extension (nn: TwoLayerNN)
+    def updateOutputLayer(
+        a1: RealVector,
+        a2: Double,
+        y: Int
+    ): TwoLayerNN = {
+      val delta2 = computeOutputDelta(a2, y)
+      // W2 = W2 - (η * δ₂ * a1)
+      val newW2 =
+        nn.W2.subtract(a1.mapMultiply(nn.learningRate).mapMultiply(delta2))
+      // b₂ = b₂ - η * δ₂
+      val newB2 = nn.b2 - nn.learningRate * delta2
+      nn.copy(W2 = newW2, b2 = newB2)
+    }
+
+  def computeHiddenDelta(
+      W2: RealVector,
+      delta2: Double,
+      a1: RealVector
+  ): RealVector = {
+    val propagated = W2.mapMultiply(delta2)
+    val grad = a1.map(a => a * (1 - a))
+    propagated.ebeMultiply(grad)
+  }
+
+  extension (nn: TwoLayerNN)
+    def updateHiddenLayer(
+        delta1: RealVector,
+        input: RealVector
+    ): TwoLayerNN = {
+      // W1​=W1​−η⋅δ1​⋅xT
+      val gradW1 = delta1.outerProduct(input)
+
+      val newW1 = nn.W1.subtract(gradW1.scalarMultiply(nn.learningRate))
+      val newB1 = nn.b1.subtract(delta1.mapMultiply(nn.learningRate))
+
+      nn.copy(W1 = newW1, b1 = newB1)
+    }
+  extension (nn: TwoLayerNN)
+    def trainOne(input: RealVector, y: Int): TwoLayerNN = {
+      val cache = nn.forward(input)
+      val delta2 = computeOutputDelta(cache.a2, y)
+      val delta1 = computeHiddenDelta(nn.W2, delta2, cache.a1)
+
+      nn
+        .updateOutputLayer(a1 = cache.a1, a2 = cache.a2, y = y)
+        .updateHiddenLayer(delta1 = delta1, input = input)
+    }
+
+  extension (nn: TwoLayerNN)
+    def train(dataset: List[(RealVector, Int)], epochs: Int): TwoLayerNN = {
+      @tailrec
+      def loop(iterate: Int, accNN: TwoLayerNN): TwoLayerNN = {
+        if iterate == 0 then accNN
+        else
+          loop(
+            iterate - 1,
+            dataset.foldLeft(accNN) { case (acc, (input, actual)) =>
+              acc.trainOne(input, actual)
+            }
+          )
+      }
+      loop(epochs, nn)
+    }
+}
+
+

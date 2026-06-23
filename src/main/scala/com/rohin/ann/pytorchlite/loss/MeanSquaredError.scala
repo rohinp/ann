@@ -1,8 +1,9 @@
-package com.rohin.ann.pytorchlite
+package com.rohin.ann.pytorchlite.loss
 
+import com.rohin.ann.pytorchlite.loss.LossFunction
 import org.apache.commons.math3.linear.RealVector
 
-object Loss {
+object MeanSquaredError extends LossFunction {
 
   def outputDelta(
       output: RealVector,

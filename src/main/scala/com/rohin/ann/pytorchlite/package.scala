@@ -10,12 +10,17 @@ package object pytorchlite {
   def vec(xs: Double*): RealVector =
     new ArrayRealVector(xs.toArray)
 
-  def randomVec(size: Int): RealVector =
-    new ArrayRealVector(Array.fill(size)(Random.nextDouble() - 0.5))
+  def zeroVec(size: Int): RealVector =
+    new ArrayRealVector(size)
+
+  def randomVec(size: Int): RealVector = {
+    val rng = new Random(42)
+    new ArrayRealVector(Array.fill(size)(rng.nextDouble() - 0.5))
+  }
 
   def randomMatrix(rows: Int, cols: Int): RealMatrix = {
     val matrix = Array2DRowRealMatrix(rows, cols)
-    for i <- (0 until rows) do matrix.setRowVector(i, randomVec(cols))
+    for i <- 0 until rows do matrix.setRowVector(i, randomVec(cols))
     matrix
   }
 }

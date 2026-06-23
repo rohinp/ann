@@ -5,7 +5,7 @@ import scala.annotation.tailrec
 import Activation.*
 
 case class PerceptronV1 private (
-    weights: RealVector,
+    weights: RealVector, // [W1,w2,...,Wn]
     bias: Double,
     learningRate: Double
 )

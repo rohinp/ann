@@ -1,4 +1,4 @@
-package com.rohin.ann.pytorchlite
+package com.rohin.ann.pytorchlite.sequential
 
 import org.apache.commons.math3.linear.RealVector
 
