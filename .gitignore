@@ -39,3 +39,4 @@ metals.sbt
 *.phd
 *.dmp
 javacore.*.txt
+.maris/
